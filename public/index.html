@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Live Audio Stream</title></head>
+<body>
+  <h2>Live Audio Recorder</h2>
+  <button id="start">Start</button>
+  <button id="stop">Stop</button>
+
+  <script>
+    let mediaRecorder, socket;
+
+    document.getElementById('start').onclick = async () => {
+      console.log('▶️  Starting…');
+      socket = new WebSocket(`ws://${window.location.host}`);
+      socket.onopen = () => {
+        console.log('🟢 WS opened, requesting mic…');
+        initRecorder();
+      };
+      socket.onerror = e => console.error('🔴 WS error', e);
+      socket.onclose = () => console.log('⚪ WS closed');
+    };
+
+    function initRecorder() {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          console.log('🎙️ Mic access granted');
+          mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+          mediaRecorder.ondataavailable = e => {
+            if (e.data && e.data.size > 0 && socket.readyState === WebSocket.OPEN) {
+              console.log('📤 Sending chunk', e.data.size, 'bytes');
+              socket.send(e.data);
+            }
+          };
+
+          mediaRecorder.onstart = () => console.log('🔴 Recording started');
+          mediaRecorder.onstop  = () => console.log('⏹️ Recording stopped');
+
+          mediaRecorder.start(500); // chunk every 500ms
+        })
+        .catch(err => console.error('⚠️ getUserMedia failed:', err));
+    }
+
+    document.getElementById('stop').onclick = () => {
+      console.log('⏹️  Stopping…');
+      mediaRecorder?.stop();
+      socket?.close();
+    };
+  </script>
+</body>
+</html>
